@@ -1,0 +1,79 @@
+{
+  "name": "Master_Orchestration",
+  "properties": {
+    "description": "Parameterized medallion orchestration pipeline",
+    "parameters": {
+      "p_storage_account": { "type": "String" },
+      "p_container": { "type": "String", "defaultValue": "landing" },
+      "p_source_folder": { "type": "String", "defaultValue": "raw/sales/orders" },
+      "p_file_name": { "type": "String", "defaultValue": "sales_orders.xlsx" },
+      "p_sheet_name": { "type": "String", "defaultValue": "Orders" },
+      "p_sql_server": { "type": "String" },
+      "p_sql_db": { "type": "String" },
+      "p_window_start": { "type": "String", "defaultValue": "2025-01-01T00:00:00Z" },
+      "p_window_end": { "type": "String", "defaultValue": "2025-01-01T01:00:00Z" }
+    },
+    "activities": [
+      {
+        "name": "Execute_Bronze",
+        "type": "ExecutePipeline",
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Bronze_Ingest_Excel",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "p_storage_account": "@pipeline().parameters.p_storage_account",
+            "p_container": "@pipeline().parameters.p_container",
+            "p_source_folder": "@pipeline().parameters.p_source_folder",
+            "p_file_name": "@pipeline().parameters.p_file_name",
+            "p_sheet_name": "@pipeline().parameters.p_sheet_name",
+            "p_sql_server": "@pipeline().parameters.p_sql_server",
+            "p_sql_db": "@pipeline().parameters.p_sql_db"
+          }
+        }
+      },
+      {
+        "name": "Execute_Silver",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          { "activity": "Execute_Bronze", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Silver_Transform",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "p_storage_account": "@pipeline().parameters.p_storage_account",
+            "p_container": "@pipeline().parameters.p_container",
+            "p_sql_server": "@pipeline().parameters.p_sql_server",
+            "p_sql_db": "@pipeline().parameters.p_sql_db"
+          }
+        }
+      },
+      {
+        "name": "Execute_Gold",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          { "activity": "Execute_Silver", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Gold_Load_Dedicated_SQL",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "p_sql_server": "@pipeline().parameters.p_sql_server",
+            "p_sql_db": "@pipeline().parameters.p_sql_db",
+            "p_watermark_start": "@pipeline().parameters.p_window_start",
+            "p_watermark_end": "@pipeline().parameters.p_window_end"
+          }
+        }
+      }
+    ]
+  }
+}

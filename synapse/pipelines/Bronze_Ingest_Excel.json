@@ -1,0 +1,79 @@
+{
+  "name": "Bronze_Ingest_Excel",
+  "properties": {
+    "description": "Bronze ingestion of raw Excel orders data from ADLS Gen2",
+    "parameters": {
+      "p_storage_account": { "type": "String" },
+      "p_container": { "type": "String", "defaultValue": "landing" },
+      "p_source_folder": { "type": "String", "defaultValue": "raw/sales/orders" },
+      "p_file_name": { "type": "String", "defaultValue": "sales_orders.xlsx" },
+      "p_sheet_name": { "type": "String", "defaultValue": "Orders" },
+      "p_bronze_folder": { "type": "String", "defaultValue": "bronze/sales_orders" },
+      "p_sql_server": { "type": "String" },
+      "p_sql_db": { "type": "String" }
+    },
+    "activities": [
+      {
+        "name": "Copy_Excel_To_Bronze_Parquet",
+        "type": "Copy",
+        "policy": { "retry": 3, "retryIntervalInSeconds": 60 },
+        "inputs": [
+          {
+            "referenceName": "ds_excel_orders_adls",
+            "type": "DatasetReference",
+            "parameters": {
+              "storageAccountName": "@pipeline().parameters.p_storage_account",
+              "container": "@pipeline().parameters.p_container",
+              "folderPath": "@pipeline().parameters.p_source_folder",
+              "fileName": "@pipeline().parameters.p_file_name",
+              "sheetName": "@pipeline().parameters.p_sheet_name"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_bronze_parquet_adls",
+            "type": "DatasetReference",
+            "parameters": {
+              "storageAccountName": "@pipeline().parameters.p_storage_account",
+              "container": "@pipeline().parameters.p_container",
+              "folderPath": "@concat(pipeline().parameters.p_bronze_folder, '/ingestion_date=', formatDateTime(utcNow(),'yyyy-MM-dd'))"
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": { "type": "ExcelSource" },
+          "sink": { "type": "ParquetSink" },
+          "enableStaging": false
+        }
+      },
+      {
+        "name": "Log_Bronze_Ingestion",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_Excel_To_Bronze_Parquet",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "ls_sql_dedicated_pool",
+          "type": "LinkedServiceReference",
+          "parameters": {
+            "sqlServerName": "@pipeline().parameters.p_sql_server",
+            "databaseName": "@pipeline().parameters.p_sql_db"
+          }
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": "INSERT INTO dbo.IngestionAudit (LayerName, SourceFile, PipelineRunId, IngestedOnUtc, Status) VALUES ('Bronze', '@{pipeline().parameters.p_file_name}', '@{pipeline().RunId}', GETUTCDATE(), 'Succeeded');"
+            }
+          ],
+          "scriptBlockExecutionTimeout": "00:10:00"
+        }
+      }
+    ]
+  }
+}

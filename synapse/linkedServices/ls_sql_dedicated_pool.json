@@ -1,0 +1,17 @@
+{
+  "name": "ls_sql_dedicated_pool",
+  "properties": {
+    "type": "AzureSqlDW",
+    "typeProperties": {
+      "connectionString": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=@{linkedService().sqlServerName};Initial Catalog=@{linkedService().databaseName}"
+    },
+    "parameters": {
+      "sqlServerName": {
+        "type": "String"
+      },
+      "databaseName": {
+        "type": "String"
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "trg_master_hourly_param",
+  "properties": {
+    "type": "ScheduleTrigger",
+    "pipelines": [
+      {
+        "pipelineReference": {
+          "referenceName": "Master_Orchestration",
+          "type": "PipelineReference"
+        },
+        "parameters": {
+          "p_file_name": "@concat('sales_orders_', formatDateTime(trigger().outputs.windowStartTime,'yyyyMMddHH'),'.xlsx')",
+          "p_sheet_name": "Orders",
+          "p_window_start": "@trigger().outputs.windowStartTime",
+          "p_window_end": "@trigger().outputs.windowEndTime"
+        }
+      }
+    ],
+    "typeProperties": {
+      "recurrence": {
+        "frequency": "Hour",
+        "interval": 1,
+        "startTime": "2025-01-01T00:00:00Z",
+        "timeZone": "UTC"
+      }
+    }
+  }
+}
