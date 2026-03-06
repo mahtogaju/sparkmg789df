@@ -1,0 +1,124 @@
+{
+  "name": "pl_medallion_csv_ingestion",
+  "properties": {
+    "description": "Enterprise-grade Medallion pipeline: Bronze raw ingestion, Silver standardization, Gold serving for dedicated SQL pool, and Purview tagging.",
+    "parameters": {
+      "p_source_file_system": { "type": "string", "defaultValue": "landing" },
+      "p_source_file_path": { "type": "string" },
+      "p_bronze_folder": { "type": "string", "defaultValue": "bronze/orders" },
+      "p_silver_folder": { "type": "string", "defaultValue": "silver/orders" },
+      "p_target_schema": { "type": "string", "defaultValue": "dbo" },
+      "p_target_table": { "type": "string", "defaultValue": "orders_gold" },
+      "p_purview_collection": { "type": "string", "defaultValue": "finance-data-products" },
+      "p_run_id": { "type": "string", "defaultValue": "@{pipeline().RunId}" }
+    },
+    "activities": [
+      {
+        "name": "A10_Copy_Landing_to_Bronze",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": { "timeout": "0.12:00:00", "retry": 2, "retryIntervalInSeconds": 60 },
+        "typeProperties": {
+          "source": { "type": "DelimitedTextSource", "storeSettings": { "type": "AzureBlobFSReadSettings", "recursive": false } },
+          "sink": { "type": "DelimitedTextSink", "storeSettings": { "type": "AzureBlobFSWriteSettings", "copyBehavior": "PreserveHierarchy" } },
+          "enableStaging": false
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_adls_landing_csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "fileSystem": "@pipeline().parameters.p_source_file_system",
+              "folderPath": "@pipeline().parameters.p_source_file_path"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_adls_bronze_csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "folderPath": "@pipeline().parameters.p_bronze_folder"
+            }
+          }
+        ]
+      },
+      {
+        "name": "A20_Dataflow_Bronze_to_Silver",
+        "type": "ExecuteDataFlow",
+        "dependsOn": [
+          { "activity": "A10_Copy_Landing_to_Bronze", "dependencyConditions": ["Succeeded"] }
+        ],
+        "policy": { "timeout": "0.04:00:00", "retry": 1, "retryIntervalInSeconds": 60 },
+        "typeProperties": {
+          "dataflow": {
+            "referenceName": "df_bronze_to_silver_orders",
+            "type": "DataFlowReference",
+            "datasetParameters": {
+              "p_input_folder": "@pipeline().parameters.p_bronze_folder",
+              "p_output_folder": "@pipeline().parameters.p_silver_folder"
+            }
+          },
+          "compute": { "coreCount": 16, "computeType": "General" },
+          "traceLevel": "Fine"
+        }
+      },
+      {
+        "name": "A30_Load_Silver_to_Gold_DedicatedSQL",
+        "type": "SqlPoolStoredProcedure",
+        "dependsOn": [
+          { "activity": "A20_Dataflow_Bronze_to_Silver", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "storedProcedureName": "dbo.usp_load_orders_gold",
+          "storedProcedureParameters": {
+            "@p_source_folder": { "value": "@pipeline().parameters.p_silver_folder", "type": "String" },
+            "@p_target_schema": { "value": "@pipeline().parameters.p_target_schema", "type": "String" },
+            "@p_target_table": { "value": "@pipeline().parameters.p_target_table", "type": "String" },
+            "@p_run_id": { "value": "@pipeline().parameters.p_run_id", "type": "String" }
+          }
+        },
+        "linkedServiceName": { "referenceName": "ls_synapse_dedicated_sql", "type": "LinkedServiceReference" }
+      },
+      {
+        "name": "A40_Purview_Tag_Gold_Asset",
+        "type": "WebActivity",
+        "dependsOn": [
+          { "activity": "A30_Load_Silver_to_Gold_DedicatedSQL", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "method": "POST",
+          "url": "@concat(linkedService().purviewEndpoint, '/catalog/api/atlas/v2/entity/bulk/classification')",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "classification": {
+              "typeName": "DataProduct",
+              "attributes": {
+                "domain": "Finance",
+                "layer": "Gold",
+                "owner": "data.engineering@contoso.com",
+                "pipelineRunId": "@{pipeline().parameters.p_run_id}"
+              }
+            },
+            "entityGuids": ["@{pipeline().globalParameters.g_orders_gold_guid}"],
+            "collection": "@{pipeline().parameters.p_purview_collection}"
+          },
+          "authentication": {
+            "type": "MSI",
+            "resource": "https://purview.azure.net"
+          }
+        }
+      }
+    ],
+    "annotations": [
+      "medallion",
+      "bronze",
+      "silver",
+      "gold",
+      "purview"
+    ]
+  },
+  "type": "Microsoft.Synapse/workspaces/pipelines"
+}
