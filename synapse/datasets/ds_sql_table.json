@@ -1,0 +1,30 @@
+{
+  "name": "ds_sql_table",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_sql_dedicated_pool",
+      "type": "LinkedServiceReference",
+      "parameters": {
+        "sqlServerName": "@dataset().sqlServerName",
+        "databaseName": "@dataset().databaseName"
+      }
+    },
+    "parameters": {
+      "sqlServerName": {
+        "type": "String"
+      },
+      "databaseName": {
+        "type": "String"
+      },
+      "tableName": {
+        "type": "String"
+      }
+    },
+    "type": "AzureSqlDWTable",
+    "typeProperties": {
+      "schema": "dbo",
+      "table": "@dataset().tableName"
+    },
+    "schema": []
+  }
+}

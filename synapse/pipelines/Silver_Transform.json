@@ -1,0 +1,62 @@
+{
+  "name": "Silver_Transform",
+  "properties": {
+    "description": "Silver transformation pipeline for orders",
+    "parameters": {
+      "p_storage_account": { "type": "String" },
+      "p_container": { "type": "String", "defaultValue": "landing" },
+      "p_bronze_folder": { "type": "String", "defaultValue": "bronze/sales_orders" },
+      "p_silver_folder": { "type": "String", "defaultValue": "silver/sales_orders" },
+      "p_sql_server": { "type": "String" },
+      "p_sql_db": { "type": "String" }
+    },
+    "activities": [
+      {
+        "name": "Dataflow_Standardize_Orders",
+        "type": "DataFlow",
+        "typeProperties": {
+          "dataflow": {
+            "referenceName": "df_orders_silver_standardize",
+            "type": "DataFlowReference"
+          },
+          "staging": {
+            "linkedService": {
+              "referenceName": "ls_adls_gen2",
+              "type": "LinkedServiceReference",
+              "parameters": {
+                "storageAccountName": "@pipeline().parameters.p_storage_account"
+              }
+            },
+            "folderPath": "tmp/dataflow/staging"
+          }
+        }
+      },
+      {
+        "name": "Upsert_Silver_SQL",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Dataflow_Standardize_Orders",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "ls_sql_dedicated_pool",
+          "type": "LinkedServiceReference",
+          "parameters": {
+            "sqlServerName": "@pipeline().parameters.p_sql_server",
+            "databaseName": "@pipeline().parameters.p_sql_db"
+          }
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": "EXEC dbo.usp_LoadSilverSalesOrders;"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

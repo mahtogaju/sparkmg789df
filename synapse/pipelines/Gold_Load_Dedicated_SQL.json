@@ -1,0 +1,34 @@
+{
+  "name": "Gold_Load_Dedicated_SQL",
+  "properties": {
+    "description": "Gold serving layer load into dedicated SQL pool",
+    "parameters": {
+      "p_sql_server": { "type": "String" },
+      "p_sql_db": { "type": "String" },
+      "p_watermark_start": { "type": "String" },
+      "p_watermark_end": { "type": "String" }
+    },
+    "activities": [
+      {
+        "name": "Load_Gold_FactSalesOrders",
+        "type": "Script",
+        "linkedServiceName": {
+          "referenceName": "ls_sql_dedicated_pool",
+          "type": "LinkedServiceReference",
+          "parameters": {
+            "sqlServerName": "@pipeline().parameters.p_sql_server",
+            "databaseName": "@pipeline().parameters.p_sql_db"
+          }
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": "EXEC dbo.usp_LoadGoldSalesOrders @WatermarkStart='@{pipeline().parameters.p_watermark_start}', @WatermarkEnd='@{pipeline().parameters.p_watermark_end}';"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

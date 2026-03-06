@@ -1,0 +1,67 @@
+name: synapse-cicd
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "dev"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON syntax
+        run: |
+          for file in synapse/**/*.json; do
+            jq empty "$file"
+          done
+
+      - name: Validate SQL files exist
+        run: |
+          test -f synapse/sql/00_schema_and_audit.sql
+          test -f synapse/sql/10_silver_layer.sql
+          test -f synapse/sql/20_gold_layer.sql
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Synapse artifacts
+        uses: Azure/Synapse-workspace-deployment@v1.9.1
+        with:
+          TargetWorkspaceName: ${{ secrets.AZURE_SYNAPSE_WORKSPACE }}
+          TemplateFile: synapse/templates/workspaceTemplate.json
+          ParametersFile: synapse/templates/parameters.${{ github.event.inputs.environment || 'dev' }}.json
+          ResourceGroupName: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          DeleteArtifactsNotInTemplate: false
+          operation: validateDeploy
+
+      - name: Run SQL bootstrap
+        run: |
+          echo "Execute synapse/sql scripts against dedicated SQL pool in order 00 -> 10 -> 20"
+
+      - name: Register and tag Purview metadata
+        env:
+          PURVIEW_ACCOUNT: ${{ secrets.PURVIEW_ACCOUNT }}
+        run: |
+          pip install azure-identity requests
+          python scripts/purview_register_and_tag.py \
+            --sql-server ${{ secrets.SQL_SERVER }} \
+            --sql-db ${{ secrets.DEDICATED_SQL_POOL }} \
+            --table dbo.FactSalesOrdersGold

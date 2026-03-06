@@ -1,0 +1,32 @@
+{
+  "name": "ds_bronze_parquet_adls",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_adls_gen2",
+      "type": "LinkedServiceReference",
+      "parameters": {
+        "storageAccountName": "@dataset().storageAccountName"
+      }
+    },
+    "parameters": {
+      "storageAccountName": {
+        "type": "String"
+      },
+      "container": {
+        "type": "String"
+      },
+      "folderPath": {
+        "type": "String"
+      }
+    },
+    "type": "Parquet",
+    "typeProperties": {
+      "location": {
+        "type": "AzureBlobFSLocation",
+        "fileSystem": "@dataset().container",
+        "folderPath": "@dataset().folderPath"
+      }
+    },
+    "schema": []
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "ds_excel_orders_adls",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_adls_gen2",
+      "type": "LinkedServiceReference",
+      "parameters": {
+        "storageAccountName": "@dataset().storageAccountName"
+      }
+    },
+    "parameters": {
+      "storageAccountName": {
+        "type": "String"
+      },
+      "container": {
+        "type": "String"
+      },
+      "folderPath": {
+        "type": "String"
+      },
+      "fileName": {
+        "type": "String"
+      },
+      "sheetName": {
+        "type": "String"
+      }
+    },
+    "type": "Excel",
+    "typeProperties": {
+      "location": {
+        "type": "AzureBlobFSLocation",
+        "fileSystem": "@dataset().container",
+        "folderPath": "@dataset().folderPath",
+        "fileName": "@dataset().fileName"
+      },
+      "sheetName": "@dataset().sheetName",
+      "firstRowAsHeader": true
+    },
+    "schema": []
+  }
+}
