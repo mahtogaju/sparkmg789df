@@ -1,0 +1,37 @@
+{
+  "name": "trg_medallion_ingestion_hourly",
+  "properties": {
+    "description": "Parameterized hourly trigger for medallion ingestion pipeline.",
+    "type": "ScheduleTrigger",
+    "typeProperties": {
+      "recurrence": {
+        "frequency": "Hour",
+        "interval": 1,
+        "startTime": "2026-01-01T00:00:00Z",
+        "timeZone": "UTC"
+      }
+    },
+    "pipelines": [
+      {
+        "pipelineReference": {
+          "referenceName": "pl_medallion_csv_ingestion",
+          "type": "PipelineReference"
+        },
+        "parameters": {
+          "p_source_file_system": "landing",
+          "p_source_file_path": "@concat('orders/', formatDateTime(trigger().scheduledTime, 'yyyy/MM/dd/HH'), '/orders.csv')",
+          "p_bronze_folder": "@concat('bronze/orders/dt=', formatDateTime(trigger().scheduledTime, 'yyyy-MM-dd-HH'))",
+          "p_silver_folder": "@concat('silver/orders/dt=', formatDateTime(trigger().scheduledTime, 'yyyy-MM-dd-HH'))",
+          "p_target_schema": "dbo",
+          "p_target_table": "orders_gold",
+          "p_run_id": "@trigger().scheduledTime"
+        }
+      }
+    ],
+    "annotations": [
+      "parameterized",
+      "bronze-ingestion"
+    ]
+  },
+  "type": "Microsoft.Synapse/workspaces/triggers"
+}
